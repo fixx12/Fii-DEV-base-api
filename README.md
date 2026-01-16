@@ -1,17 +1,19 @@
-[![-----------------------------------------------------](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/colored.png)](#table-of-contents)
-
 <div align="center">
 
-# KuroNeko API
+<img src="https://c.termai.cc/i191/f9nlM5.jpg" alt="KuroNeko API Banner" width="100%" style="border-radius: 10px;" />
 
+# KuroNeko API
 **Simple, Fast, and Dynamic REST API Base built with Express & TypeScript.**
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Express.js](https://img.shields.io/badge/Express.js-404D59?style=for-the-badge)](https://expressjs.com/)
-[![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+<p align="center">
+  <img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white" alt="Express" />
+  <img src="https://img.shields.io/badge/PM2-2B037A?style=for-the-badge&logo=pm2&logoColor=white" alt="PM2" />
+  <img src="https://img.shields.io/badge/VPS_Ready-107C10?style=for-the-badge&logo=windows-terminal&logoColor=white" alt="VPS" />
+  <img src="https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Vercel" />
+</p>
 
-[**Demo Website**](https://kuronekoapy.vercel.app) • [**Rest Api**](https://nekoapy.zone.id) • [**Bug report**](https://github.com/DanzzAraAra/kuroneko-base-api/issues)
+[Demo Website](https://your-demo-link.com) • [Rest Api](https://your-api-link.com) • [Bug Report](https://github.com/DanzzAraAra/kuroneko-base-api/issues)
 
 </div>
 
@@ -21,15 +23,17 @@
 
 **KuroNeko API** adalah template dasar (boilerplate) untuk membuat REST API yang modern, rapi, dan mudah dikembangkan.
 
-Project ini dirancang untuk mengatasi kerumitan setup awal dengan menyediakan fitur **Auto-Load Router** berbasis konfigurasi JSON, penghitung pengunjung (*visitor counter*), dan antarmuka dokumentasi (*Docs UI*) yang estetik secara otomatis.
+Project ini dirancang untuk mengatasi kerumitan setup awal dengan menyediakan fitur **Auto-Load Router** berbasis konfigurasi JSON, penghitung pengunjung (visitor counter), dan antarmuka dokumentasi (Docs UI) yang estetik secara otomatis.
 
-### ✨ Fitur Utama
+---
+
+## ✨ Fitur Utama
 
 | Fitur | Deskripsi |
 | :--- | :--- |
 | 🚀 **TypeScript** | Coding lebih aman, rapi, dan minim bug dengan static typing. |
 | ⚙️ **Dynamic Routing** | Tambah endpoint via `src/config.json` tanpa perlu mengubah `index.ts`. |
-| 📖 **Auto Documentation** | Halaman `/docs` otomatis tergenerate berdasarkan config yang di buat. |
+| 📖 **Auto Docs** | Halaman `/docs` otomatis tergenerate berdasarkan config yang dibuat. |
 | 🎨 **Modern UI** | Tampilan Landing page & Docs yang bersih, modern, dan responsif. |
 | 📊 **Visitor Counter** | Database JSON sederhana untuk melacak traffic API. |
 | 📂 **Modular Structure** | Susunan folder dikelompokkan rapi berdasarkan kategori. |
@@ -41,7 +45,7 @@ Project ini dirancang untuk mengatasi kerumitan setup awal dengan menyediakan fi
 
 Struktur folder disusun agar mudah dipahami dan dimodifikasi:
 
-```text
+```txt
 .
 ├── index.ts                   # Entry point utama server
 ├── dist/                      # Compiled JavaScript files (Production)
@@ -65,7 +69,7 @@ Struktur folder disusun agar mudah dipahami dan dimodifikasi:
 │   ├── config.json            # Configuration router
 │   ├── logger.ts
 │   └── ...
-├── package.json               # dependencies & scripts
+├── package.json               # Dependencies & scripts
 ├── tsconfig.json              # TypeScript configuration
 └── vercel.json                # Vercel deployment config
 ```
@@ -90,7 +94,7 @@ cd kuroneko-base-api
 npm install
 ```
 
-2. Mode Development
+3. Mode Development
 Gunakan ini saat sedang mengedit kode. Server akan restart otomatis jika ada perubahan file.
 ```bash
 npm run dev
@@ -99,7 +103,7 @@ npm run dev
 > Server berjalan di: http://localhost:3000
 > 
 3. Build untuk Production
-Gunakan ini sebelum upload ke server hosting.
+Gunakan ini sebelum upload ke server hosting/VPS.
 ```bash
 npm run build
 ```
@@ -115,13 +119,14 @@ Berikut adalah penjelasan script yang ada di package.json:
 ```json
 {
   "scripts": {
-    "clean": "rm -rf dist",                     // Menghapus folder dist lama
-    "prebuild": "npm run clean",                // Dijalankan otomatis sebelum build
-    "build": "tsc && npm run copy-assets",      // Kompilasi TS & Salin Assets
-    "copy-assets": "...",                       // Logic menyalin file non-TS ke dist
-    "start": "node dist/index.js",              // Menjalankan server production
-    "dev": "ts-node index.ts",                  // Menjalankan mode dev standar
-    "dev:watch": "nodemon --exec ts-node index.ts" // Mode dev dengan auto-reload
+    "clean": "rm -rf dist",                      // Menghapus folder dist lama
+    "prebuild": "npm run clean",                 // Dijalankan otomatis sebelum build
+    "build": "tsc && npm run copy-assets",       // Kompilasi TS & Salin Assets
+    "copy-assets": "ts-node tools/copyAssets.ts",// Logic menyalin file non-TS ke dist
+    "start": "node dist/index.js",               // Menjalankan server production
+    "dev": "ts-node index.ts",                   // Menjalankan mode dev standar
+    "pm2": "pm2 start dist/index.js --name 'kuroneko-api'", // Jalankan via PM2
+    "stop": "pm2 stop kuroneko-api"              // Hentikan PM2
   }
 }
 ```
@@ -133,7 +138,7 @@ Buka file src/config.json dan tambahkan metadata endpoint kamu di dalam object "
 ```json
 {
   "tags": {
-    "games": [ 
+    "games": [
       {
         "name": "Tebak Gambar",          // Judul di Docs
         "endpoint": "/api/games/tebak",  // URL Path
@@ -151,10 +156,11 @@ Buka file src/config.json dan tambahkan metadata endpoint kamu di dalam object "
   }
 }
 ```
+
 Step 2: Buat Logic File
 Buat file TypeScript sesuai struktur folder kategori di router/.
  * Kategori: games
- * Filename: tebak
+ * Filename: tebak.ts
  * Path: router/games/tebak.ts
 <!-- end list -->
 ```typescript
@@ -162,7 +168,7 @@ import { Request, Response } from 'express';
 
 export default async function (req: Request, res: Response) {
     // 1. Ambil parameter
-    const { level } = req.query; 
+    const { level } = req.query;
 
     // 2. Validasi
     if (!level) return res.json({ status: false, message: "Level required!" });
@@ -179,26 +185,36 @@ export default async function (req: Request, res: Response) {
 ```
 
 Step 3: Test
-Jika mode dev, cukup refresh browser. Jika mode prod, lakukan npm run build lagi. Endpoint baru akan otomatis muncul di halaman /docs.
-🚀 Deployment
+Jika mode dev, cukup refresh browser. Jika mode prod, lakukan npm run build lagi. 
+Endpoint baru akan otomatis muncul di halaman /docs.
+Deployment
 Option A: Vercel (Recommended)
+
  * Push kode ke GitHub.
  * Import repository ke Vercel.
  * Vercel akan otomatis mendeteksi vercel.json dan melakukan build.
-Option B: VPS / Panel (Manual)
-# 1. Build project di komputer lokal atau di server
+
+Option B: VPS / Panel
+
+ * Build project di komputer lokal atau di server:
 ```bash
-npm run build
+   npm run build
 ```
 
-# 2. Pastikan folder 'dist/' sudah ada
-# 3. Jalankan command start
-```bash
-npm start
-```
+ * Pastikan folder dist/ sudah terbentuk.
+ * Jalankan command start:
+   npm start
 
 Option C: PM2 (Process Manager)
-Agar server tetap berjalan di background (VPS):
+Agar server tetap berjalan di background (VPS) walaupun terminal ditutup.
+Cara Cepat (via Script):
+
+# Jalankan PM2
+```bash
+npm run pm2
+```
+
+Cara Manual:
 ```bash
 npm install -g pm2
 pm2 start dist/index.js --name "kuroneko-api"
@@ -212,11 +228,13 @@ Project ini dilengkapi GUI bawaan:
  * /docs : Swagger-like documentation (Auto generated)
  * /config : Cek konfigurasi JSON
  * /donasi : Support creator page
+
 🐛 Troubleshooting Common Issues
+
 <details>
 <summary><b>Error: "Cannot find module './src/qris'"</b></summary>
 
- * Penyebab: Kamu mencoba menjalankan file JS tapi belum melakukan build.
+ * Penyebab: Kamu mencoba menjalankan file JS tapi belum melakukan build, atau file asset tidak tersalin.
  * Solusi: Jalankan npm run build terlebih dahulu. Cek apakah file dist/src/qris.js sudah terbentuk.
 
 </details>
@@ -228,10 +246,11 @@ Project ini dilengkapi GUI bawaan:
 </details>
 <details>
 <summary><b>QRIS Image tidak muncul</b></summary>
-
+  
  * Solusi: Buka src/qris.ts dan pastikan variabel STATIC_QRIS sudah diisi dengan string URL/Base64 QRIS yang valid.
 
 </details>
+
 <div align="center">
 Created with ❤️ by Danzz
 </div>
