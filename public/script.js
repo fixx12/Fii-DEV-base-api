@@ -2,22 +2,479 @@ document.addEventListener('DOMContentLoaded', init);
 
 let globalConfig = null;
 let toastTimeout;
+let allCodes = [];
+let isAdmin = false;
+
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
 
 async function init() {
+    if (isMobileDevice()) {
+        document.body.classList.add('is-mobile');
+    }
+    
+    if (document.getElementById('codeGrid')) {
+        document.body.classList.add('code-page');
+        await initCodePage();
+        return;
+    }
+
+    if (document.getElementById('term-logs')) {
+        try {
+            const response = await fetch('/config');
+            globalConfig = await response.json();
+            
+            setUi(globalConfig);
+            loadEnd(globalConfig.tags);
+            startWIBClock();
+            await kuroneko(globalConfig);
+            loadReminder(); 
+            setSearch();
+        } catch (e) {
+            document.getElementById('term-logs').innerHTML = `<span class="text-red-400 font-bold px-1">SYSTEM FAILURE</span><br>${e.message}`;
+        }
+    }
+}
+
+async function initCodePage() {
+    checkAuth();
+    setupRouting();
+    
+    const addForm = document.getElementById('addCodeForm');
+    if (addForm) {
+        addForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = e.target.querySelector('button');
+            const originalText = btn.innerText;
+            
+            const id = 'neko-' + Math.random().toString(36).substr(2, 6);
+            
+            const title = e.target.title.value;
+            const desc = e.target.description.value;
+            const content = e.target.content.value;
+
+            btn.innerText = "SAVING...";
+            btn.disabled = true;
+
+            try {
+                const req = await fetch('/api/code/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, title, description: desc, content })
+                });
+                
+                const res = await req.json();
+                
+                if(res.status) {
+                    document.getElementById('addCodeModal').classList.add('hidden');
+                    e.target.reset();
+                    loadList();
+                    showToast("Snippet Saved!", "success");
+                } else {
+                    showToast("Error: " + res.message, "error");
+                }
+            } catch(err) {
+                showToast("Connection Error", "error");
+            }
+            btn.innerText = originalText;
+            btn.disabled = false;
+        });
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const id = urlParams.get('id');
+    
+    if (id) await loadDetail(id);
+    else await loadList();
+    
+    const searchInput = document.getElementById('searchInput');
+    if(searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            const filtered = allCodes.filter(c => 
+                (c.title && c.title.toLowerCase().includes(term)) ||
+                c.id.toLowerCase().includes(term) || 
+                c.description.toLowerCase().includes(term)
+            );
+            renderGrid(filtered);
+        });
+    }
+}
+
+function checkAuth() {
+    const token = localStorage.getItem('adminToken');
+    if (token) {
+        isAdmin = true;
+        updateAdminUI();
+    }
+}
+
+function updateAdminUI() {
+    const loginBtn = document.getElementById('btnLoginNav');
+    if (!loginBtn) return;
+    
+    if(isAdmin) {
+        loginBtn.innerHTML = '<i class="fa-solid fa-right-from-bracket"></i> LOGOUT';
+        loginBtn.classList.replace('border-primary', 'border-red-500');
+        loginBtn.classList.replace('text-primary', 'text-red-500');
+        loginBtn.onclick = logout;
+    } else {
+        loginBtn.innerHTML = '<i class="fa-solid fa-user-shield"></i> ADMIN';
+        loginBtn.onclick = () => document.getElementById('loginModal').classList.remove('hidden');
+    }
+}
+
+async function doLogin() {
+    const u = document.getElementById('admUser').value.trim();
+    const p = document.getElementById('admPass').value.trim();
+    const btn = document.getElementById('btnLoginConfirm');
+    
+    btn.innerText = "CHECKING...";
+    
     try {
-        const response = await fetch('/config');
-        globalConfig = await response.json();
+        const req = await fetch('/api/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: u, password: p })
+        });
+        const res = await req.json();
         
-        setUi(globalConfig);
-        loadEnd(globalConfig.tags);
-        
-        await kuroneko(globalConfig);
-        
-        loadReminder();
-        setSearch();
-        fallingFlower();
+        if (res.status) {
+            localStorage.setItem('adminToken', res.token);
+            isAdmin = true;
+            document.getElementById('loginModal').classList.add('hidden');
+            updateAdminUI();
+            loadList(); 
+            showToast('Welcome back, Admin!', 'success');
+        } else {
+            showToast('Wrong Credentials', 'error');
+        }
     } catch (e) {
-        document.getElementById('term-logs').innerHTML = `<span class="term-error font-bold bg-red-100 px-1">FATAL ERROR: SYSTEM FAILURE</span><br>${e.message}`;
+        showToast('Login Error', 'error');
+    }
+    btn.innerText = "LOGIN";
+}
+
+function logout() {
+    localStorage.removeItem('adminToken');
+    isAdmin = false;
+    location.reload();
+}
+
+async function loadList() {
+    switchView('home');
+    const container = document.getElementById('codeGrid');
+    
+    container.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-circle-notch fa-spin text-3xl text-primary"></i></div>';
+
+    try {
+        const req = await fetch('/api/admin/list');
+        allCodes = await req.json();
+        if (!Array.isArray(allCodes)) allCodes = [];
+        
+        renderGrid(allCodes);
+        updateTags(allCodes);
+    } catch (e) {
+        container.innerHTML = `<div class="text-center text-red-400 font-bold">FAILED TO LOAD DATA</div>`;
+    }
+}
+
+function renderGrid(data) {
+    const container = document.getElementById('codeGrid');
+    container.innerHTML = '';
+    
+    if (data.length === 0) {
+        container.innerHTML = `<div class="text-center text-gray-500 py-10 font-bold">NO SNIPPETS FOUND</div>`;
+        return;
+    }
+
+    data.forEach((item, index) => {
+        const tagMatch = item.description.match(/#(\w+)/);
+        const tag = tagMatch ? tagMatch[1] : 'snippet';
+        const date = new Date(item.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+        
+        const displayTitle = item.title || item.id;
+
+        const wrapper = document.createElement('div');
+        wrapper.className = "w-full animate-fade-in";
+        wrapper.style.animationDelay = `${index * 50}ms`;
+        
+        const deleteBtn = isAdmin ? `
+            <button onclick="deleteCode(event, '${item.id}')" class="text-white bg-red-500 hover:bg-red-600 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all px-3 py-1 text-[10px] font-bold rounded">
+                <i class="fa-solid fa-trash mr-1"></i> DEL
+            </button>
+        ` : '';
+
+        wrapper.innerHTML = `
+            <div onclick="openDetail('${item.id}')" class="code-card cursor-pointer group flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full">
+                
+                <div class="flex items-center gap-4 min-w-0 flex-1">
+                    <div class="w-12 h-12 bg-primary/10 text-primary border-2 border-primary/20 flex shrink-0 items-center justify-center font-bold text-lg rounded-lg">&lt;/&gt;</div>
+                    <div class="min-w-0">
+                        <h4 class="font-bold text-lg text-slate-800 truncate group-hover:text-primary transition-colors capitalize">${displayTitle}</h4>
+                        <div class="flex items-center gap-2 text-xs text-gray-400 font-mono mt-1">
+                            <span class="text-[10px] bg-gray-100 px-1 rounded border border-gray-200">${item.id}</span>
+                            <span>•</span>
+                            <span>${date}</span>
+                            <span class="bg-slate-700 text-white px-2 py-0.5 rounded text-[10px] uppercase font-bold">#${tag}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+                    ${deleteBtn}
+                    <i class="fa-solid fa-chevron-right text-gray-300 group-hover:text-primary transition-colors ml-2"></i>
+                </div>
+
+            </div>
+        `;
+        container.appendChild(wrapper);
+    });
+}
+
+async function loadDetail(id) {
+    window.history.pushState({}, '', `?id=${id}`);
+    switchView('detail');
+    
+    const container = document.getElementById('detailContent');
+    const loader = document.getElementById('detailLoader');
+    
+    container.classList.add('hidden');
+    loader.classList.remove('hidden');
+
+    try {
+        const req = await fetch(`/api/code/${id}`);
+        const res = await req.json();
+
+        if (res.status && res.data) {
+            const data = res.data;
+            const tagMatch = data.description.match(/#(\w+)/);
+            const tag = tagMatch ? tagMatch[1] : 'snippet';
+
+            document.getElementById('viewTitle').innerText = data.title || data.id;
+            document.getElementById('viewId').innerText = data.id;
+            document.getElementById('viewFilename').innerText = `${data.id}.js`;
+            document.getElementById('viewDate').innerText = new Date(data.createdAt).toLocaleDateString();
+            document.getElementById('viewTag').innerText = tag;
+            document.getElementById('viewDesc').innerText = data.description;
+            document.getElementById('viewRawLink').onclick = () => window.open(`/code/raw/${data.id}`, '_blank');
+            
+            const codeBlock = document.getElementById('viewCode');
+            const codePre = document.querySelector('#view-detail pre');
+            
+            if (codePre) {
+                codePre.style.whiteSpace = 'pre-wrap';
+                codePre.style.wordWrap = 'break-word';
+                codePre.style.overflowX = 'hidden';
+                codePre.style.wordBreak = 'break-word';
+                codePre.style.tabSize = '4';
+                codePre.style.MozTabSize = '4';
+            }
+            
+            if (codeBlock) {
+                codeBlock.style.whiteSpace = 'pre-wrap';
+                codeBlock.style.wordBreak = 'break-word';
+                codeBlock.style.overflowWrap = 'break-word';
+                codeBlock.style.overflowX = 'hidden';
+                codeBlock.style.tabSize = '4';
+                codeBlock.classList.add('code-wrapper');
+            }
+            
+            const formattedContent = formatCodeIndentation(data.content);
+            codeBlock.textContent = formattedContent;
+            
+            if(window.Prism) {
+                Prism.highlightElement(codeBlock);
+                setTimeout(() => {
+                    applyCodeWrapStyles();
+                }, 100);
+            }
+
+            loader.classList.add('hidden');
+            container.classList.remove('hidden');
+            
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            showToast('Code not found', 'error');
+            goHome();
+        }
+    } catch (e) {
+        showToast('Error loading code', 'error');
+        goHome();
+    }
+}
+
+function formatCodeIndentation(code) {
+    const lines = code.split('\n');
+    let minIndent = Infinity;
+    
+    const nonEmptyLines = lines.filter(line => line.trim().length > 0);
+    
+    nonEmptyLines.forEach(line => {
+        const leadingSpaces = line.match(/^[ \t]*/)[0].length;
+        if (leadingSpaces < minIndent) {
+            minIndent = leadingSpaces;
+        }
+    });
+    
+    if (minIndent === Infinity || minIndent === 0) {
+        return code;
+    }
+    
+    return lines.map(line => {
+        if (line.trim().length === 0) return line;
+        return line.substring(minIndent);
+    }).join('\n');
+}
+
+function openDetail(id) { loadDetail(id); }
+function goHome() {
+    window.history.pushState({}, '', '/code');
+    loadList();
+}
+
+function setupRouting() {
+    window.onpopstate = () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const id = urlParams.get('id');
+        if(id) loadDetail(id);
+        else loadList();
+    };
+}
+
+function switchView(viewName) {
+    const views = ['home', 'detail'];
+    views.forEach(v => {
+        const el = document.getElementById(`view-${v}`);
+        if(el) {
+            if(v === viewName) el.classList.remove('hidden');
+            else el.classList.add('hidden');
+        }
+    });
+}
+
+function updateTags(data) {
+    const counts = { 'all': data.length };
+    data.forEach(item => {
+        const match = item.description.match(/#(\w+)/);
+        const tag = match ? match[1] : 'other';
+        counts[tag] = (counts[tag] || 0) + 1;
+    });
+
+    const tagContainer = document.getElementById('tagFilters');
+    if(!tagContainer) return;
+    
+    let html = '';
+    Object.keys(counts).forEach(tag => {
+        const isActive = tag === 'all' ? 'bg-primary text-white border-primary shadow-hard' : 'bg-slate-700 text-white border-slate-700 shadow-hard hover:bg-slate-600';
+        html += `<button onclick="filterTag('${tag}')" class="px-4 py-1.5 text-xs font-bold transition-all uppercase border-2 ${isActive}" data-tag="${tag}">
+            ${tag} (${counts[tag]})
+        </button>`;
+    });
+    tagContainer.innerHTML = html;
+}
+
+window.filterTag = (tag) => {
+    document.querySelectorAll('#tagFilters button').forEach(btn => {
+        if(btn.dataset.tag === tag) {
+            btn.className = 'px-4 py-1.5 text-xs font-bold transition-all uppercase border-2 bg-primary text-white border-primary shadow-hard';
+        } else {
+            btn.className = 'px-4 py-1.5 text-xs font-bold transition-all uppercase border-2 bg-slate-700 text-white border-slate-700 shadow-hard hover:bg-slate-600';
+        }
+    });
+
+    if (tag === 'all') renderGrid(allCodes);
+    else {
+        const filtered = allCodes.filter(item => {
+            const t = (item.description.match(/#(\w+)/) || [])[1] || 'other';
+            return t === tag;
+        });
+        renderGrid(filtered);
+    }
+};
+
+function setupCodeEventListeners() { }
+
+async function deleteCode(e, id) {
+    e.stopPropagation();
+    if(!confirm(`Delete snippet ${id}?`)) return;
+    
+    try {
+        const req = await fetch(`/api/admin/delete/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': localStorage.getItem('adminToken') }
+        });
+        const res = await req.json();
+        if(res.status) {
+            showToast('Deleted successfully', 'success');
+            loadList();
+        } else {
+            showToast(res.message, 'error');
+        }
+    } catch(e) { showToast('Delete failed', 'error'); }
+}
+
+function showToast(msg, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `fixed bottom-5 right-5 px-6 py-3 border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white font-bold transform translate-y-10 opacity-0 transition-all duration-300 z-[100] flex items-center gap-3 font-mono text-sm ${type === 'error' ? 'bg-red-500' : 'bg-green-500'}`;
+    toast.innerHTML = `<i class="fa-solid ${type === 'error' ? 'fa-circle-exclamation' : 'fa-check-circle'}"></i> ${msg.toUpperCase()}`;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.remove('translate-y-10', 'opacity-0'));
+    setTimeout(() => {
+        toast.classList.add('translate-y-10', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+window.copyCode = () => {
+    const code = document.getElementById('viewCode').textContent;
+    navigator.clipboard.writeText(code).then(() => showToast('Code copied!', 'success'));
+};
+
+function applyCodeWrapStyles() {
+    const codeElements = document.querySelectorAll('#view-detail pre, #view-detail code');
+    codeElements.forEach(el => {
+        el.style.whiteSpace = 'pre-wrap';
+        el.style.wordWrap = 'break-word';
+        el.style.overflowX = 'hidden';
+        el.style.wordBreak = 'break-word';
+        el.style.overflowWrap = 'break-word';
+        el.style.tabSize = '4';
+        el.style.MozTabSize = '4';
+    });
+}
+
+window.addEventListener('load', function() {
+    applyCodeWrapStyles();
+    
+    const observer = new MutationObserver(applyCodeWrapStyles);
+    const detailContent = document.getElementById('detailContent');
+    if (detailContent) {
+        observer.observe(detailContent, { childList: true, subtree: true });
+    }
+});
+
+function startWIBClock() {
+    const timeEl = document.getElementById('server-time');
+    const dateEl = document.getElementById('server-date');
+    if(!timeEl) return;
+    
+    updateTime();
+    setInterval(updateTime, 1000);
+
+    function updateTime() {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('id-ID', {
+            timeZone: 'Asia/Jakarta',
+            hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
+        const dateString = now.toLocaleDateString('id-ID', {
+            timeZone: 'Asia/Jakarta',
+            day: 'numeric', month: 'long', year: 'numeric'
+        });
+        if(timeEl) timeEl.innerText = timeString;
+        if(dateEl) dateEl.innerText = dateString;
     }
 }
 
@@ -26,7 +483,8 @@ async function loadReminder() {
         const req = await fetch('../src/reminder.json');
         const data = await req.json();
         if(data?.message) {
-            document.getElementById('running-text').innerText = data.message.toUpperCase();
+            const el = document.getElementById('running-text');
+            if(el) el.innerText = data.message.toUpperCase();
         }
     } catch (e) { console.warn("No reminder config found"); }
 }
@@ -34,6 +492,7 @@ async function loadReminder() {
 function messeg(msg) {
     const toast = document.getElementById('custom-toast');
     const msgBox = document.getElementById('toast-message');
+    if(!toast || !msgBox) return;
     
     msgBox.innerText = msg;
     toast.classList.remove('translate-y-32', 'opacity-0');
@@ -46,27 +505,29 @@ function messeg(msg) {
 
 function terminalLog(message, type = 'info') {
     const logs = document.getElementById('term-logs');
+    if(!logs) return;
+
     const line = document.createElement('div');
     const time = new Date().toLocaleTimeString('en-US', {hour12: false, hour: "2-digit", minute:"2-digit", second:"2-digit"});
     
     let prefix = `<span class="text-primary/60 font-bold">[${time}]</span>`;
     
     if (type === 'error') {
-        prefix += ` <span class="term-error font-bold">ERR</span>`;
-        line.className = "term-error";
+        prefix += ` <span class="text-red-500 font-bold">ERR</span>`;
+        line.className = "text-red-400";
     } else if (type === 'success') {
-        prefix += ` <span class="term-success font-bold">OK</span>`;
-        line.className = "term-success";
+        prefix += ` <span class="text-green-500 font-bold">OK</span>`;
+        line.className = "text-green-400";
     } else if (type === 'warn') {
-        prefix += ` <span class="term-warn font-bold">WARN</span>`;
-        line.className = "term-warn";
+        prefix += ` <span class="text-yellow-500 font-bold">WARN</span>`;
+        line.className = "text-yellow-400";
     } else if (type === 'req-success') {
-        line.className = "term-success"; 
+        line.className = "text-green-400"; 
     } else if (type === 'req-error') {
-        line.className = "term-error";
+        line.className = "text-red-400";
     } else {
-        prefix += ` <span class="term-info font-bold">INFO</span>`;
-        line.className = "term-info";
+        prefix += ` <span class="text-blue-400 font-bold">INFO</span>`;
+        line.className = "text-gray-300";
     }
 
     line.innerHTML = `${prefix} ${message}`;
@@ -76,16 +537,17 @@ function terminalLog(message, type = 'info') {
 
 async function kuroneko(config) {
     const logs = document.getElementById('term-logs');
+    if(!logs) return;
     
     const cmdLine = document.createElement('div');
     cmdLine.className = "mb-2 break-all flex flex-wrap items-center";
     
     const prompt = document.createElement('span');
     prompt.className = "text-green-500 font-bold mr-2";
-    prompt.innerHTML = "root@danzz:~/nekoapy#";
+    prompt.innerHTML = "root@danzz~$";
     
     const inputCmd = document.createElement('span');
-    inputCmd.className = "text-black font-mono relative";
+    inputCmd.className = "text-gray-200 font-mono relative";
     
     const cursor = document.createElement('span');
     cursor.className = "inline-block w-2.5 h-4 bg-green-500 align-middle ml-0.5 animate-pulse";
@@ -96,13 +558,11 @@ async function kuroneko(config) {
     logs.appendChild(cmdLine);
 
     const cmd = "npm run dev";
-    
     await new Promise(r => setTimeout(r, 600));
 
     for (let char of cmd) {
         const randomSpeed = Math.floor(Math.random() * (120 - 40 + 1)) + 40;
         await new Promise(r => setTimeout(r, randomSpeed));
-        
         const textNode = document.createTextNode(char);
         inputCmd.insertBefore(textNode, cursor);
     }
@@ -112,118 +572,137 @@ async function kuroneko(config) {
     
     const printRaw = (text) => {
         const div = document.createElement('div');
-        div.className = "text-primary/70 text-xs font-mono ml-1";
+        div.className = "text-gray-400 text-xs font-mono ml-1";
         div.innerText = text;
         logs.appendChild(div);
         logs.scrollTop = logs.scrollHeight;
     };
 
     const version = config.settings.apiVersion || '1.0.0';
-
     printRaw(`\n> nekoapy@${version} dev`);
-    await new Promise(r => setTimeout(r, Math.random() * 100 + 50));
+    await new Promise(r => setTimeout(r, 200));
     printRaw(`> node src/index.ts\n`);
-    await new Promise(r => setTimeout(r, Math.random() * 300 + 200));
+    await new Promise(r => setTimeout(r, 400));
     
     const endpoints = Object.values(config.tags).flat();
     const total = endpoints.length;
-    
-    terminalLog("Reading environment config...", 'info');
-    await new Promise(r => setTimeout(r, Math.random() * 300 + 150));
-    
-    terminalLog(`Loaded configuration: production`, 'info');
-    await new Promise(r => setTimeout(r, Math.random() * 200 + 100));
-    
-    terminalLog(`Loaded ${total} routes to express app...`, 'warn');
+
+    terminalLog(`Loading ${total} routes...`, 'info');
     
     let count = 0;
-    const maxShow = 5;
+    const maxShow = 3;
     for (const route of endpoints) {
         if(count < maxShow) {
-             terminalLog(`mapped {${route.method}} ${route.endpoint}`, 'success');
-             await new Promise(r => setTimeout(r, Math.random() * 50 + 20));
+             terminalLog(`Mapped {${route.method}} ${route.endpoint}`, 'success');
+             await new Promise(r => setTimeout(r, 50));
         }
         count++;
     }
     if(count > maxShow) terminalLog(`... +${count - maxShow} hidden endpoints mapped`, 'info');
 
-    await new Promise(r => setTimeout(r, 400));
+    await new Promise(r => setTimeout(r, 300));
     
     const serverUrl = window.location.origin;
     terminalLog(`Server is running at ${serverUrl}`, 'success');
 
-    document.getElementById('term-input-line').classList.remove('hidden');
+    const inputLine = document.getElementById('term-input-line');
+    if(inputLine) inputLine.classList.remove('hidden');
     
     const container = document.getElementById('api-container');
-    container.classList.remove('opacity-0', 'translate-y-4');
+    if(container) container.classList.remove('opacity-0', 'translate-y-4');
 }
 
 function setUi(config) {
     const s = config.settings;
-    document.getElementById('nav-title').innerText = s.apiName || 'API';
-    document.getElementById('stat-visitors').innerText = s.visitors || '1';
-    document.getElementById('stat-version').innerText = s.apiVersion || '1.0';
-    document.getElementById('api-desc').innerText = s.description || 'System online.';
-
+    const navTitle = document.getElementById('nav-title');
+    const statVis = document.getElementById('stat-visitors');
+    
+    if(navTitle) navTitle.innerText = s.apiName || 'API';
+    if(statVis) statVis.innerText = s.visitors || '1';
+    
     if (s.favicon) {
         let link = document.querySelector("link[rel~='icon']") || document.createElement('link');
         link.rel = 'icon';
         link.href = s.favicon;
         document.head.appendChild(link);
     }
-    
-    const total = Object.values(config.tags).reduce((acc, curr) => acc + curr.length, 0);
-    document.getElementById('stat-endpoints').innerText = total;
 }
 
 function setSearch() {
     const input = document.getElementById('search-input');
     const noResults = document.getElementById('no-results');
+    if(!input) return;
 
     input.addEventListener('input', (e) => {
         const val = e.target.value.toLowerCase();
-        let hasVisible = false;
+        const isSearching = val.length > 0;
+        let anyVisible = false;
 
-        document.querySelectorAll('.api-card-wrapper').forEach(el => {
-            const txt = el.getAttribute('data-search').toLowerCase();
-            if (txt.includes(val)) {
-                el.classList.remove('hidden');
-                hasVisible = true;
+        document.querySelectorAll('.api-section').forEach(section => {
+            const grid = section.querySelector('.api-section-grid');
+            const arrow = section.querySelector('.cat-arrow');
+            let matchInThisSection = 0;
+
+            section.querySelectorAll('.api-card-wrapper').forEach(card => {
+                const txt = card.getAttribute('data-search').toLowerCase();
+                if (txt.includes(val)) {
+                    card.classList.remove('hidden');
+                    matchInThisSection++;
+                } else {
+                    card.classList.add('hidden');
+                }
+            });
+
+            if (matchInThisSection > 0) {
+                section.classList.remove('hidden');
+                anyVisible = true;
+                if (isSearching) {
+                    grid.classList.remove('hidden');
+                    arrow.classList.add('rotate-180');
+                } else {
+                    grid.classList.add('hidden');
+                    arrow.classList.remove('rotate-180');
+                }
             } else {
-                el.classList.add('hidden');
+                section.classList.add('hidden');
             }
         });
 
-        document.querySelectorAll('.api-section').forEach(sec => {
-            const cards = sec.querySelectorAll('.api-card-wrapper:not(.hidden)');
-            sec.classList.toggle('hidden', cards.length === 0);
-        });
-
-        noResults.classList.toggle('hidden', hasVisible);
-        noResults.classList.toggle('flex', !hasVisible);
+        if(noResults) {
+            noResults.classList.toggle('hidden', anyVisible);
+            noResults.classList.toggle('flex', !anyVisible);
+        }
     });
 }
 
 function loadEnd(tags) {
     const container = document.getElementById('api-container');
+    if(!container) return;
+    
     container.innerHTML = '';
 
     for (const [cat, routes] of Object.entries(tags)) {
         const section = document.createElement('div');
-        section.className = "api-section mb-12";
-        section.innerHTML = `
-            <div class="flex items-center gap-4 mb-6 sticky top-16 z-30 bg-bg-main/90 backdrop-blur-sm py-2">
-                <div class="w-4 h-4 bg-gradient-to-br from-primary to-sky-blue rounded-full"></div>
-                <h2 class="text-2xl font-display font-bold uppercase text-primary">
-                    ${cat}
-                </h2>
-                <div class="h-[2px] bg-gradient-to-r from-primary to-sky-blue flex-1"></div>
-                <span class="text-xs font-mono font-bold bg-gradient-to-r from-primary to-sky-blue text-white px-2 py-1 rounded-full">${routes.length} EP</span>
-            </div>
-        `;
+        section.className = "api-section w-full";
         
+        const catId = `cat-${cat.replace(/\s+/g, '-')}`;
+
+        const headerBtn = `
+            <button onclick="toggleCategory('${catId}')" class="w-full flex items-center justify-between bg-white text-primary p-4 rounded-lg shadow-hard border-2 border-primary mb-4 group hover:bg-gray-50 active:scale-[0.99] transition-all duration-150">
+                <div class="flex items-center gap-3">
+                    <i class="fa-solid fa-folder-open text-xl"></i>
+                    <h2 class="text-lg font-display font-bold uppercase tracking-wider">${cat}</h2>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-[10px] font-mono bg-primary/10 border border-primary/20 px-2 py-1 rounded text-primary font-bold">${routes.length} EP</span>
+                    <i id="arrow-${catId}" class="cat-arrow fa-solid fa-chevron-down transition-transform duration-300"></i>
+                </div>
+            </button>
+        `;
+
         const grid = document.createElement('div');
-        grid.className = 'grid gap-6';
+        grid.id = `grid-${catId}`;
+        grid.className = 'api-section-grid grid grid-cols-1 gap-4 hidden mb-8'; 
 
         routes.forEach((route, idx) => {
             const id = `${cat}-${idx}`.replace(/\s+/g, '-');
@@ -231,83 +710,92 @@ function loadEnd(tags) {
             
             let inputsHtml = '';
             if (route.params?.length) {
-                inputsHtml = `<div class="bg-gradient-to-b from-white to-sky-blue/10 p-4 border-t-2 border-primary/20 grid gap-4">` + 
+                inputsHtml = `<div class="bg-gray-50 p-4 border-t-2 border-primary/20 grid gap-3">` + 
                 route.params.map(p => 
                     `<div class="relative">
-                        <div class="flex justify-between items-center mb-1.5">
+                        <div class="flex justify-between items-center mb-1">
                             <label class="text-[10px] font-bold text-primary uppercase tracking-wider flex items-center gap-2">
-                                <span class="w-2 h-2 bg-primary rounded-full inline-block"></span> ${p.name.toUpperCase()}
+                                <span class="w-1.5 h-1.5 bg-primary rounded-full inline-block"></span> ${p.name.toUpperCase()}
                             </label>
-                            <span class="text-[9px] font-bold tracking-wide ${p.required ? 'text-white bg-gradient-to-r from-red-500 to-pink-500 px-1.5 py-0.5 rounded' : 'text-primary bg-primary/10 px-1.5 py-0.5 border border-primary/30 rounded'}">${p.required ? 'REQ' : 'OPT'}</span>
+                            <span class="text-[9px] font-bold ${p.required ? 'text-red-500' : 'text-primary/60'}">${p.required ? 'REQ' : 'OPT'}</span>
                         </div>
                         <input type="text" id="input-${id}-${p.name}" placeholder="${p.description || 'Value...'}" 
-                        class="w-full border-2 border-primary/30 p-2.5 font-mono text-xs focus:border-primary focus:ring-2 focus:ring-primary/10 focus:outline-none transition-all shadow-sm placeholder:text-primary/40 bg-white/80 rounded">
+                        class="w-full border-2 border-primary/20 p-2 font-mono text-xs focus:border-primary focus:outline-none transition-colors rounded bg-white">
                      </div>`
                 ).join('') + `</div>`;
             }
 
-            const methodColor = route.method === 'GET' ? 'bg-gradient-to-r from-sky-blue to-primary' : 
-                               route.method === 'POST' ? 'bg-gradient-to-r from-green-500 to-emerald-600' :
-                               route.method === 'PUT' ? 'bg-gradient-to-r from-amber-500 to-orange-500' :
-                               route.method === 'DELETE' ? 'bg-gradient-to-r from-red-500 to-pink-500' : 'bg-gradient-to-r from-primary to-purple-600';
+            const methodColor = route.method === 'GET' ? 'bg-sky-500' : 
+                               route.method === 'POST' ? 'bg-green-500' :
+                               route.method === 'DELETE' ? 'bg-red-500' : 'bg-orange-500';
             
             const card = document.createElement('div');
-            card.className = 'api-card-wrapper bg-white/80 backdrop-blur-sm border-2 border-primary/30 shadow-hard hover:shadow-hard-hover transition-all duration-200 group relative rounded-lg';
+            card.className = 'api-card-wrapper w-full bg-white border-2 border-primary/20 rounded-lg hover:border-primary transition-colors';
             card.setAttribute('data-search', searchTerms);
             
             card.innerHTML = `
-                <div class="p-4 cursor-pointer select-none" onclick="toggle('${id}')">
-                    <div class="flex justify-between items-center gap-4">
-                        <div class="flex items-center gap-3 overflow-hidden">
-                            <span class="px-2 py-1 text-[10px] font-bold text-white ${methodColor} border border-white/50 shadow-[2px_2px_0px_0px_rgba(139,92,246,0.3)] shrink-0 font-mono tracking-wider rounded">${route.method}</span>
-                            <code class="font-bold text-sm sm:text-base truncate font-mono text-primary group-hover:text-sky-blue transition-colors bg-primary/5 px-2 py-0.5 border border-primary/20 group-hover:border-primary rounded">${route.endpoint}</code>
+                <div class="p-3 cursor-pointer select-none" onclick="toggle('${id}')">
+                    <div class="flex justify-between items-center gap-3">
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <span class="px-1.5 py-0.5 text-[10px] font-bold text-white ${methodColor} rounded font-mono">${route.method}</span>
+                            <code class="font-bold text-xs sm:text-sm truncate font-mono text-slate-700">${route.endpoint}</code>
                         </div>
-                        <div class="w-8 h-8 flex items-center justify-center border-2 border-primary/30 bg-white group-hover:bg-primary/10 transition-colors shadow-sm rounded-lg">
-                             <i id="icon-${id}" class="fa-solid fa-plus text-sm transition-transform duration-300 text-primary"></i>
-                        </div>
+                        <i id="icon-${id}" class="fa-solid fa-plus text-xs text-primary transition-transform duration-300"></i>
                     </div>
-                    <p class="text-xs text-primary/70 mt-3 font-mono leading-relaxed pl-1">${route.name}</p>
+                    <p class="text-[10px] text-gray-500 mt-2 font-mono truncate">${route.name}</p>
                 </div>
                 
-                <div id="body-${id}" class="hidden animate-fade-in">
+                <div id="body-${id}" class="hidden animate-slide-down">
                     ${inputsHtml}
                     
-                    <div class="p-3 flex gap-3 border-t-2 border-primary/20 bg-gradient-to-r from-white to-primary/5">
-                        <button onclick="testReq(this, '${route.endpoint}', '${route.method}', '${id}')" class="flex-1 bg-gradient-to-r from-primary to-sky-blue text-white font-bold py-2.5 hover:from-sky-blue hover:to-primary border-2 border-primary/50 transition-all shadow-[2px_2px_0px_0px_rgba(139,92,246,0.3)] active:translate-y-[2px] active:shadow-none text-xs tracking-widest uppercase rounded disabled:opacity-50 disabled:cursor-not-allowed">
-                            <i class="fa-solid fa-bolt mr-2"></i> Execute
+                    <div class="p-3 flex gap-2 border-t-2 border-primary/10 bg-gray-50/50">
+                        <button id="btn-exec-${id}" onclick="testReq(this, '${route.endpoint}', '${route.method}', '${id}')" class="flex-1 bg-primary text-white font-bold py-2 hover:bg-violet-700 transition-colors shadow-hard-hover active:shadow-none active:translate-y-[2px] text-[10px] tracking-widest uppercase rounded border border-black min-w-[100px]">
+                            Execute
                         </button>
-                        <button onclick="copy('${route.endpoint}')" class="px-4 border-2 border-primary/30 bg-white hover:bg-primary/10 active:scale-95 transition-transform rounded" title="Copy URL">
-                            <i class="fa-regular fa-copy text-primary"></i>
+                        <button onclick="copy('${route.endpoint}')" class="px-3 border border-primary/30 bg-white hover:bg-primary/5 rounded" title="Copy URL">
+                            <i class="fa-regular fa-copy text-primary text-xs"></i>
                         </button>
                     </div>
 
-                    <div id="res-area-${id}" class="hidden border-t-4 border-primary/30 bg-code-bg text-[10px] relative rounded-b-lg">
-                        <div class="flex justify-between items-center bg-gradient-to-r from-primary/10 to-sky-blue/10 px-4 py-2 border-b border-primary/30">
-                            <div class="flex gap-3 items-center">
-                                <span class="w-2 h-2 rounded-full bg-gradient-to-r from-red-400 to-pink-500"></span>
-                                <span class="w-2 h-2 rounded-full bg-gradient-to-r from-yellow-400 to-amber-500"></span>
-                                <span id="status-${id}" class="text-primary/70 font-bold ml-2">IDLE</span>
+                    <div id="res-area-${id}" class="hidden border-t-4 border-primary/50 bg-slate-900 text-[11px] relative rounded-b-lg overflow-hidden shadow-inner">
+                        <div class="flex justify-between items-center bg-black/40 px-3 py-2 border-b border-white/10">
+                            <div class="flex gap-2 items-center">
+                                <span class="w-2 h-2 rounded-full bg-yellow-400" id="status-dot-${id}"></span>
+                                <span id="status-${id}" class="text-gray-400 font-bold font-mono">WAITING</span>
                             </div>
-                            <div class="flex gap-3 text-primary/70">
-                                <span id="time-${id}">--ms</span>
-                            </div>
+                            <span id="time-${id}" class="text-gray-500 font-mono text-[10px]">--ms</span>
                         </div>
                         
-                        <div class="absolute top-2 right-2 flex gap-2 z-20">
-                             <a id="dl-btn-${id}" class="hidden bg-gradient-to-r from-green-500/20 to-emerald-600/20 text-green-600 border border-green-400/30 px-2 py-0.5 hover:bg-green-500/30 cursor-pointer rounded"><i class="fa-solid fa-download"></i></a>
-                             <button onclick="copyRes('${id}')" class="bg-gradient-to-r from-blue-500/20 to-sky-blue/20 text-sky-blue border border-sky-blue/30 px-2 py-0.5 hover:bg-sky-blue/30 rounded"><i class="fa-regular fa-clone"></i></button>
-                             <button onclick="reset('${id}')" class="bg-gradient-to-r from-red-500/20 to-pink-500/20 text-red-600 border border-red-400/30 px-2 py-0.5 hover:bg-red-500/30 rounded"><i class="fa-solid fa-xmark"></i></button>
+                        <div class="absolute top-2 right-2 flex gap-1 z-20">
+                             <a id="dl-btn-${id}" class="hidden bg-green-500/20 text-green-400 border border-green-500/50 px-2 py-0.5 hover:bg-green-500/30 rounded cursor-pointer transition-colors"><i class="fa-solid fa-download"></i></a>
+                             <button onclick="copyRes('${id}')" class="bg-blue-500/20 text-blue-400 border border-blue-500/50 px-2 py-0.5 hover:bg-blue-500/30 rounded transition-colors"><i class="fa-regular fa-clone"></i></button>
+                             <button onclick="reset('${id}')" class="bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-0.5 hover:bg-red-500/30 rounded transition-colors"><i class="fa-solid fa-xmark"></i></button>
                         </div>
 
-                        <div id="output-${id}" class="font-mono text-xs overflow-x-auto whitespace-pre-wrap break-all max-h-[400px] p-4 custom-scrollbar min-h-[80px] text-primary/80 bg-white/50 rounded-b-lg"></div>
+                        <div id="output-${id}" class="font-mono text-[10px] overflow-x-auto whitespace-pre-wrap break-all max-h-[400px] p-4 custom-scrollbar min-h-[80px] text-gray-300 leading-relaxed"></div>
                     </div>
                 </div>`;
             grid.appendChild(card);
         });
+
+        section.innerHTML = headerBtn;
         section.appendChild(grid);
         container.appendChild(section);
     }
 }
+
+window.toggleCategory = (catId) => {
+    const grid = document.getElementById(`grid-${catId}`);
+    const arrow = document.getElementById(`arrow-${catId}`);
+    
+    if(grid.classList.contains('hidden')) {
+        grid.classList.remove('hidden');
+        arrow.classList.add('rotate-180');
+    } else {
+        grid.classList.add('hidden');
+        arrow.classList.remove('rotate-180');
+    }
+};
 
 window.toggle = (id) => {
     const b = document.getElementById(`body-${id}`);
@@ -338,7 +826,8 @@ window.copyRes = (id) => {
 window.reset = (id) => {
     document.getElementById(`res-area-${id}`).classList.add('hidden');
     document.getElementById(`output-${id}`).innerHTML = '';
-    document.getElementById(`dl-btn-${id}`).classList.add('hidden');
+    const dlBtn = document.getElementById(`dl-btn-${id}`);
+    if(dlBtn) dlBtn.classList.add('hidden');
     document.querySelectorAll(`[id^="input-${id}-"]`).forEach(i => i.value = '');
     terminalLog(`Console cleared for req-${id.split('-').pop()}`);
 };
@@ -348,27 +837,33 @@ window.testReq = async (btn, url, method, id) => {
 
     const out = document.getElementById(`output-${id}`);
     const status = document.getElementById(`status-${id}`);
+    const statusDot = document.getElementById(`status-dot-${id}`);
     const time = document.getElementById(`time-${id}`);
     const dlBtn = document.getElementById(`dl-btn-${id}`);
     
-    const originalBtnText = '<i class="fa-solid fa-bolt mr-2"></i> Execute';
+    const originalBtnText = 'Execute';
     
     btn.disabled = true;
-    btn.classList.add('opacity-50', 'cursor-not-allowed');
+    btn.classList.add('opacity-70', 'cursor-not-allowed');
     
-    let elapsedSeconds = 0;
-    btn.innerText = `WAIT ${elapsedSeconds}s`;
-
-    const timerInterval = setInterval(() => {
-        elapsedSeconds++;
-        btn.innerText = `WAIT ${elapsedSeconds}s`;
-    }, 1000);
+    let startTime = Date.now();
+    let timerInterval = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        btn.innerHTML = `<span class="font-mono">${elapsed}ms...</span>`;
+    }, 75);
     
     document.getElementById(`res-area-${id}`).classList.remove('hidden');
     
-    dlBtn.classList.add('hidden');
-    dlBtn.href = '#';
-    out.innerHTML = '<span class="text-primary/50 animate-pulse">Sending packets...</span>';
+    if(dlBtn) {
+        dlBtn.classList.add('hidden');
+        dlBtn.href = '#';
+    }
+    
+    status.innerText = 'PROCESSING...';
+    status.className = 'text-yellow-400 font-bold font-mono';
+    statusDot.className = 'w-2 h-2 rounded-full bg-yellow-400';
+
+    out.innerHTML = '<span class="text-gray-500 italic">executing...</span>';
     
     const params = {};
     document.querySelectorAll(`[id^="input-${id}-"]`).forEach(i => {
@@ -380,17 +875,19 @@ window.testReq = async (btn, url, method, id) => {
 
     const fullUrl = fetchUrl.startsWith('http') ? fetchUrl : window.location.origin + fetchUrl;
 
-    const start = performance.now();
     try {
         const req = await fetch(fetchUrl, opts);
+        
+        clearInterval(timerInterval);
         const end = performance.now();
-        const duration = (end - start).toFixed(0);
+        const duration = (Date.now() - startTime); 
         
         status.innerText = `${req.status} ${req.statusText}`;
-        status.className = req.ok ? 'text-green-600 font-bold ml-2' : 'text-red-600 font-bold ml-2';
+        status.className = req.ok ? 'text-green-400 font-bold font-mono' : 'text-red-400 font-bold font-mono';
+        statusDot.className = req.ok ? 'w-2 h-2 rounded-full bg-green-400' : 'w-2 h-2 rounded-full bg-red-400';
         time.innerText = `${duration}ms`;
 
-        terminalLog(`[${req.status}] ${fullUrl}`, req.ok ? 'req-success' : 'req-error');
+        terminalLog(`[${req.status}] ${fullUrl} (${duration}ms)`, req.ok ? 'req-success' : 'req-error');
 
         const type = req.headers.get('content-type');
         if (type?.includes('json')) {
@@ -399,13 +896,15 @@ window.testReq = async (btn, url, method, id) => {
         } else if (type?.startsWith('image')) {
             const blob = await req.blob();
             const urlObj = URL.createObjectURL(blob);
-            dlBtn.href = urlObj;
-            dlBtn.download = `img-${Date.now()}.jpg`;
-            dlBtn.classList.remove('hidden');
+            if(dlBtn) {
+                dlBtn.href = urlObj;
+                dlBtn.download = `img-${Date.now()}.jpg`;
+                dlBtn.classList.remove('hidden');
+            }
             
             out.innerHTML = `
-                <div class="border border-dashed border-primary/30 p-2 bg-white/50 rounded-lg flex justify-center">
-                    <img src="${urlObj}" class="max-w-full shadow-lg max-h-[300px] rounded">
+                <div class="border border-dashed border-gray-600 p-4 bg-black/20 rounded-lg flex justify-center">
+                    <img src="${urlObj}" class="max-w-full shadow-lg max-h-[400px] rounded border border-gray-700">
                 </div>`;
         } else if (type?.includes('audio')) {
             const blob = await req.blob();
@@ -414,15 +913,16 @@ window.testReq = async (btn, url, method, id) => {
             out.innerText = await req.text();
         }
     } catch (err) {
-        out.innerHTML = `<span class="text-red-600 font-bold">CONNECTION_REFUSED</span><br><span class="text-primary/60">${err.message}</span>`;
+        clearInterval(timerInterval);
+        out.innerHTML = `<span class="text-red-400 font-bold">CONNECTION_REFUSED</span><br><span class="text-gray-500">${err.message}</span>`;
         status.innerText = 'ERR';
-        status.className = 'text-red-600 font-bold ml-2';
+        statusDot.className = 'w-2 h-2 rounded-full bg-red-500';
+        status.className = 'text-red-400 font-bold font-mono';
         terminalLog(`Fetch Failed: ${err.message}`, 'error');
     } finally {
-        clearInterval(timerInterval);
         btn.disabled = false;
         btn.innerHTML = originalBtnText;
-        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        btn.classList.remove('opacity-70', 'cursor-not-allowed');
     }
 };
 
@@ -442,136 +942,3 @@ function syntaxHighlight(json) {
         return `<span class="${cls}">${match}</span>`;
     });
 }
-
-function fallingFlower() {
-    const container = document.getElementById('falling-flowers-container');
-    
-    if(!container) return;
-
-    const yourFavoriteFlower = [
-        'https://c.termai.cc/i193/Zuhw5.png',
-        'https://c.termai.cc/i151/ScGW.png',
-        'https://c.termai.cc/i156/QVY3n.png'
-    ];
-    function createFlower() {
-        const flower = document.createElement('div');
-        flower.classList.add('falling-flower');
-        
-        const randomIndex = Math.floor(Math.random() * yourFavoriteFlower.length);
-        const selectedUrl = yourFavoriteFlower[randomIndex];
-        flower.style.backgroundImage = `url('${selectedUrl}')`;
-        
-        const left = Math.random() * 90; 
-        flower.style.left = `${left}vw`;
-        
-        const size = 15 + Math.random() * 15;
-        flower.style.width = `${size}px`;
-        flower.style.height = `${size}px`;
-        const fallDuration = 8 + Math.random() * 7;
-        const swayDuration = 3 + Math.random() * 3;
-        flower.style.animation = `fall ${fallDuration}s linear forwards, sway ${swayDuration}s ease-in-out infinite`;
-        const delay = Math.random() * 5;
-        flower.style.animationDelay = `${delay}s`;
-        container.appendChild(flower);
-        setTimeout(() => {
-            if (flower.parentNode) {
-                flower.remove();
-            }
-        }, (fallDuration + delay) * 1000);
-    }
-    
-    setInterval(createFlower, 1000 + Math.random() * 1000);
-    
-    for (let i = 0; i < 5; i++) {
-        setTimeout(createFlower, i * 500);
-    }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    const widget = document.getElementById('music-widget');
-    const toggleBtn = document.getElementById('music-toggle');
-    const audio = document.getElementById('audio-player');
-    const playBtn = document.getElementById('btn-play');
-    const playIcon = playBtn.querySelector('i');
-    const cover = document.getElementById('music-cover-container').querySelector('img');
-    
-    let isPlaying = false;
-    let isOpen = false;
-
-    function toggleWidget() {
-        isOpen = !isOpen;
-        if (isOpen) {
-            widget.classList.remove('translate-x-[calc(100%-2.5rem)]', 'md:translate-x-[calc(100%-3rem)]');
-            widget.classList.add('translate-x-0');
-        } else {
-            widget.classList.remove('translate-x-0');
-            widget.classList.add('translate-x-[calc(100%-2.5rem)]', 'md:translate-x-[calc(100%-3rem)]');
-        }
-    }
-
-    toggleBtn.addEventListener('click', toggleWidget);
-
-    playBtn.addEventListener('click', () => {
-        if (isPlaying) {
-            audio.pause();
-            playIcon.classList.replace('fa-pause', 'fa-play');
-            cover.parentElement.classList.remove('animate-spin-slow');
-        } else {
-            audio.play().catch(e => console.log("Audio play blocked", e));
-            playIcon.classList.replace('fa-play', 'fa-pause');
-            cover.parentElement.classList.add('animate-spin-slow');
-            if(!isOpen) toggleWidget();
-        }
-        isPlaying = !isPlaying;
-    });
-
-    audio.addEventListener('timeupdate', () => {
-        const pct = (audio.currentTime / audio.duration) * 100;
-        document.getElementById('progress-bar').style.width = `${pct}%`;
-    });
-
-    audio.addEventListener('ended', () => {
-        isPlaying = false;
-        playIcon.classList.replace('fa-pause', 'fa-play');
-        cover.parentElement.classList.remove('animate-spin-slow');
-        document.getElementById('progress-bar').style.width = '0%';
-    });
-
-    document.getElementById('progress-container').addEventListener('click', (e) => {
-        const width = e.target.clientWidth;
-        const clickX = e.offsetX;
-        audio.currentTime = (clickX / width) * audio.duration;
-    });
-
-    const mascotWidget = document.getElementById('mascot-widget');
-    const mascotBubble = document.getElementById('mascot-bubble');
-    const mascotText = document.getElementById('mascot-text');
-    
-    const messages = [
-        "hay welcome :)",
-        "welcome to my rest apis ^•^",
-        ":D",
-        "humm ?"
-    ];
-    let msgIndex = 0;
-    let bubbleTimeout;
-
-    mascotWidget.addEventListener('click', () => {
-        if (bubbleTimeout) clearTimeout(bubbleTimeout);
-
-        const isHidden = mascotBubble.classList.contains('opacity-0');
-
-        if (isHidden) {
-            mascotText.innerText = messages[msgIndex];
-            mascotBubble.classList.remove('opacity-0', 'translate-x-4', 'pointer-events-none');
-            
-            msgIndex = (msgIndex + 1) % messages.length;
-
-            bubbleTimeout = setTimeout(() => {
-                mascotBubble.classList.add('opacity-0', 'translate-x-4', 'pointer-events-none');
-            }, 4000);
-        } else {
-            mascotBubble.classList.add('opacity-0', 'translate-x-4', 'pointer-events-none');
-        }
-    });
-});
