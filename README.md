@@ -202,23 +202,6 @@ Option B: VPS / Panel
  * Jalankan command start:
    npm start
 
-Option C: PM2 (Process Manager)
-Agar server tetap berjalan di background (VPS) walaupun terminal ditutup.
-Cara Cepat (via Script):
-
-# Jalankan PM2
-```bash
-npm run pm2
-```
-
-Cara Manual:
-```bash
-npm install -g pm2
-pm2 start dist/index.js --name "kuroneko-api"
-pm2 save
-pm2 startup
-```
-
 🖼️ Dokumentasi UI
 Project ini dilengkapi GUI bawaan:
  * / : Landing Page
