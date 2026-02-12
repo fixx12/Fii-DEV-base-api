@@ -1,17 +1,13 @@
 document.addEventListener('DOMContentLoaded', init);
-
 let globalConfig = null;
 let toastTimeout;
-
 function isMobileDevice() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
-
 async function init() {
     if (isMobileDevice()) {
         document.body.classList.add('is-mobile');
     }
-
     if (document.getElementById('term-logs')) {
         try {
             const response = await fetch('/config');
@@ -28,7 +24,6 @@ async function init() {
         }
     }
 }
-
 function showToast(msg, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `fixed bottom-5 right-5 px-6 py-3 border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white font-bold transform translate-y-10 opacity-0 transition-all duration-300 z-[100] flex items-center gap-3 font-mono text-sm ${type === 'error' ? 'bg-red-500' : 'bg-green-500'}`;
@@ -40,15 +35,12 @@ function showToast(msg, type = 'info') {
         setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
-
 function startWIBClock() {
     const timeEl = document.getElementById('server-time');
     const dateEl = document.getElementById('server-date');
     if(!timeEl) return;
-    
     updateTime();
     setInterval(updateTime, 1000);
-
     function updateTime() {
         const now = new Date();
         const timeString = now.toLocaleTimeString('id-ID', {
@@ -63,7 +55,6 @@ function startWIBClock() {
         if(dateEl) dateEl.innerText = dateString;
     }
 }
-
 async function loadReminder() {
     try {
         const req = await fetch('../src/reminder.json');
@@ -74,15 +65,12 @@ async function loadReminder() {
         }
     } catch (e) { console.warn("No reminder config found"); }
 }
-
 function messeg(msg) {
     const toast = document.getElementById('custom-toast');
     const msgBox = document.getElementById('toast-message');
     if(!toast || !msgBox) return;
-    
     msgBox.innerText = msg;
     toast.classList.remove('translate-y-32', 'opacity-0');
-    
     if (toastTimeout) clearTimeout(toastTimeout);
     toastTimeout = setTimeout(() => {
         toast.classList.add('translate-y-32', 'opacity-0');
@@ -96,7 +84,7 @@ function terminalLog(message, type = 'info') {
     const line = document.createElement('div');
     const time = new Date().toLocaleTimeString('en-US', {hour12: false, hour: "2-digit", minute:"2-digit", second:"2-digit"});
     
-    let prefix = `<span class="text-primary/60 font-bold">[${time}]</span>`;
+    let prefix = `<span class="text-slate-500 font-bold">[${time}]</span>`;
     
     if (type === 'error') {
         prefix += ` <span class="text-red-500 font-bold">ERR</span>`;
@@ -274,14 +262,14 @@ function loadEnd(tags) {
         const catId = `cat-${cat.replace(/\s+/g, '-')}`;
 
         const headerBtn = `
-            <button onclick="toggleCategory('${catId}')" class="w-full flex items-center justify-between bg-white text-primary p-4 rounded-lg shadow-hard border-2 border-primary mb-4 group hover:bg-gray-50 active:scale-[0.99] transition-all duration-150">
-                <div class="flex items-center gap-3">
-                    <i class="fa-solid fa-folder-open text-xl"></i>
-                    <h2 class="text-lg font-display font-bold uppercase tracking-wider">${cat}</h2>
-                </div>
-                <div class="flex items-center gap-3">
-                    <span class="text-[10px] font-mono bg-primary/10 border border-primary/20 px-2 py-1 rounded text-primary font-bold">${routes.length} EP</span>
-                    <i id="arrow-${catId}" class="cat-arrow fa-solid fa-chevron-down transition-transform duration-300"></i>
+            <button id="btn-${catId}" onclick="toggleCategory('${catId}')" class="category-btn w-full flex items-center justify-between bg-white text-slate-700 p-4 rounded-lg shadow-sm border border-slate-300 mb-4 group hover:bg-slate-50 active:scale-[0.99] transition-all duration-150">
+                <div class="flex items-center gap-3 relative z-10 w-full">
+                    <i class="fa-solid fa-folder text-xl text-yellow-500"></i>
+                    <h2 class="text-lg font-bold uppercase tracking-wider text-slate-800 flex-1 text-left">${cat}</h2>
+                    <div class="flex items-center gap-3">
+                        <span class="text-[10px] font-mono bg-slate-200 border border-slate-300 px-2 py-1 rounded text-slate-600 font-bold">${routes.length} EP</span>
+                        <i id="arrow-${catId}" class="cat-arrow fa-solid fa-chevron-down transition-transform duration-300 text-slate-400"></i>
+                    </div>
                 </div>
             </button>
         `;
@@ -296,64 +284,80 @@ function loadEnd(tags) {
             
             let inputsHtml = '';
             if (route.params?.length) {
-                inputsHtml = `<div class="bg-gray-50 p-4 border-t-2 border-primary/20 grid gap-3">` + 
+                inputsHtml = `<div class="bg-gray-50 p-4 border-t border-slate-200 grid gap-3">` + 
                 route.params.map(p => 
                     `<div class="relative">
                         <div class="flex justify-between items-center mb-1">
-                            <label class="text-[10px] font-bold text-primary uppercase tracking-wider flex items-center gap-2">
-                                <span class="w-1.5 h-1.5 bg-primary rounded-full inline-block"></span> ${p.name.toUpperCase()}
+                            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 bg-slate-400 rounded-full inline-block"></span> ${p.name.toUpperCase()}
                             </label>
-                            <span class="text-[9px] font-bold ${p.required ? 'text-red-500' : 'text-primary/60'}">${p.required ? 'REQ' : 'OPT'}</span>
+                            <span class="text-[9px] font-bold ${p.required ? 'text-red-500' : 'text-slate-400'}">${p.required ? 'REQ' : 'OPT'}</span>
                         </div>
                         <input type="text" id="input-${id}-${p.name}" placeholder="${p.description || 'Value...'}" 
-                        class="w-full border-2 border-primary/20 p-2 font-mono text-xs focus:border-primary focus:outline-none transition-colors rounded bg-white">
+                        class="w-full border border-slate-300 p-2 font-mono text-xs focus:border-blue-400 focus:ring-1 focus:ring-blue-400 focus:outline-none transition-colors rounded-md bg-white">
                      </div>`
                 ).join('') + `</div>`;
             }
 
+            let uploadHtml = '';
+            if (route.method === 'POST' || route.method.includes('POST')) {
+                uploadHtml = `
+                    <div class="mt-2 w-full">
+                        <input type="file" id="file-${id}" class="hidden" onchange="updateFileLabel('${id}')">
+                        <button onclick="document.getElementById('file-${id}').click()" 
+                            class="w-full py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 border-dashed text-slate-500 hover:text-blue-500 text-[10px] font-bold uppercase tracking-widest rounded-[2px] flex items-center justify-center gap-2 transition-all active:scale-[0.99]">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> UPLOAD FILE <span id="file-label-${id}" class="normal-case font-mono text-blue-600 hidden ml-1"></span>
+                        </button>
+                    </div>
+                `;
+            }
+
             const methodColor = route.method === 'GET' ? 'bg-sky-500' : 
-                               route.method === 'POST' ? 'bg-green-500' :
-                               route.method === 'DELETE' ? 'bg-red-500' : 'bg-orange-500';
+                               route.method === 'POST' ? 'bg-emerald-500' :
+                               route.method === 'DELETE' ? 'bg-rose-500' : 'bg-amber-500';
             
             const card = document.createElement('div');
-            card.className = 'api-card-wrapper w-full bg-white border-2 border-primary/20 rounded-lg hover:border-primary transition-colors';
+            card.className = 'api-card-wrapper w-full bg-white border border-slate-300 rounded-lg hover:border-blue-400 transition-colors shadow-sm overflow-hidden';
             card.setAttribute('data-search', searchTerms);
             
             card.innerHTML = `
-                <div class="p-3 cursor-pointer select-none" onclick="toggle('${id}')">
+                <div class="p-3 cursor-pointer select-none hover:bg-slate-50 transition-colors" onclick="toggle('${id}')">
                     <div class="flex justify-between items-center gap-3">
                         <div class="flex items-center gap-2 overflow-hidden">
-                            <span class="px-1.5 py-0.5 text-[10px] font-bold text-white ${methodColor} rounded font-mono">${route.method}</span>
+                            <span class="px-2 py-0.5 text-[10px] font-bold text-white ${methodColor} rounded shadow-sm font-mono min-w-[50px] text-center">${route.method}</span>
                             <code class="font-bold text-xs sm:text-sm truncate font-mono text-slate-700">${route.endpoint}</code>
                         </div>
-                        <i id="icon-${id}" class="fa-solid fa-plus text-xs text-primary transition-transform duration-300"></i>
+                        <i id="icon-${id}" class="fa-solid fa-plus text-xs text-slate-400 transition-transform duration-300"></i>
                     </div>
-                    <p class="text-[10px] text-gray-500 mt-2 font-mono truncate">${route.name}</p>
+                    <p class="text-[10px] text-slate-500 mt-2 font-mono truncate pl-1">${route.name}</p>
                 </div>
                 
                 <div id="body-${id}" class="hidden animate-slide-down">
                     ${inputsHtml}
                     
-                    <div class="p-3 flex gap-2 border-t-2 border-primary/10 bg-gray-50/50">
-                        <button id="btn-exec-${id}" onclick="testReq(this, '${route.endpoint}', '${route.method}', '${id}')" class="flex-1 bg-primary text-white font-bold py-2 hover:bg-violet-700 transition-colors shadow-hard-hover active:shadow-none active:translate-y-[2px] text-[10px] tracking-widest uppercase rounded border border-black min-w-[100px]">
-                            Execute
-                        </button>
-                        <button onclick="copy('${route.endpoint}')" class="px-3 border border-primary/30 bg-white hover:bg-primary/5 rounded" title="Copy URL">
-                            <i class="fa-regular fa-copy text-primary text-xs"></i>
-                        </button>
+                    <div class="p-3 border-t border-slate-200 bg-gray-50/50">
+                        <div class="flex gap-2">
+                            <button id="btn-exec-${id}" onclick="testReq(this, '${route.endpoint}', '${route.method}', '${id}')" class="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold py-2 hover:shadow-lg hover:from-blue-600 hover:to-indigo-700 transition-all shadow-md active:scale-[0.98] text-[10px] tracking-widest uppercase rounded border border-blue-700/20">
+                                EXECUTE
+                            </button>
+                            <button onclick="copy('${route.endpoint}')" class="px-3 border border-slate-300 bg-white hover:bg-slate-50 text-slate-600 rounded shadow-sm transition-all" title="Copy URL">
+                                <i class="fa-regular fa-copy text-xs"></i>
+                            </button>
+                        </div>
+                        ${uploadHtml}
                     </div>
 
-                    <div id="res-area-${id}" class="hidden border-t-4 border-primary/50 bg-slate-900 text-[11px] relative rounded-b-lg overflow-hidden shadow-inner">
-                        <div class="flex justify-between items-center bg-black/40 px-3 py-2 border-b border-white/10">
+                    <div id="res-area-${id}" class="hidden border-t-2 border-slate-700 bg-[#1e1e1e] text-[11px] relative rounded-b-lg overflow-hidden shadow-inner">
+                        <div class="flex justify-between items-center bg-[#252526] px-3 py-2 border-b border-slate-600">
                             <div class="flex gap-2 items-center">
-                                <span class="w-2 h-2 rounded-full bg-yellow-400" id="status-dot-${id}"></span>
+                                <span class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" id="status-dot-${id}"></span>
                                 <span id="status-${id}" class="text-gray-400 font-bold font-mono">WAITING</span>
                             </div>
                             <span id="time-${id}" class="text-gray-500 font-mono text-[10px]">--ms</span>
                         </div>
                         
                         <div class="absolute top-2 right-2 flex gap-1 z-20">
-                             <a id="dl-btn-${id}" class="hidden bg-green-500/20 text-green-400 border border-green-500/50 px-2 py-0.5 hover:bg-green-500/30 rounded cursor-pointer transition-colors"><i class="fa-solid fa-download"></i></a>
+                             <a id="dl-btn-${id}" class="hidden bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 px-2 py-0.5 hover:bg-emerald-500/30 rounded cursor-pointer transition-colors"><i class="fa-solid fa-download"></i></a>
                              <button onclick="copyRes('${id}')" class="bg-blue-500/20 text-blue-400 border border-blue-500/50 px-2 py-0.5 hover:bg-blue-500/30 rounded transition-colors"><i class="fa-regular fa-clone"></i></button>
                              <button onclick="reset('${id}')" class="bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-0.5 hover:bg-red-500/30 rounded transition-colors"><i class="fa-solid fa-xmark"></i></button>
                         </div>
@@ -370,10 +374,29 @@ function loadEnd(tags) {
     }
 }
 
+window.updateFileLabel = (id) => {
+    const input = document.getElementById(`file-${id}`);
+    const label = document.getElementById(`file-label-${id}`);
+    if (input && input.files && input.files[0]) {
+        label.innerText = `(${input.files[0].name})`;
+        label.classList.remove('hidden');
+    } else {
+        label.classList.add('hidden');
+    }
+};
+
 window.toggleCategory = (catId) => {
     const grid = document.getElementById(`grid-${catId}`);
     const arrow = document.getElementById(`arrow-${catId}`);
+    const btn = document.getElementById(`btn-${catId}`);
     
+    if(btn) {
+        btn.classList.add('animating');
+        setTimeout(() => {
+            btn.classList.remove('animating');
+        }, 500);
+    }
+
     if(grid.classList.contains('hidden')) {
         grid.classList.remove('hidden');
         arrow.classList.add('rotate-180');
@@ -414,28 +437,38 @@ window.reset = (id) => {
     document.getElementById(`output-${id}`).innerHTML = '';
     const dlBtn = document.getElementById(`dl-btn-${id}`);
     if(dlBtn) dlBtn.classList.add('hidden');
+    
     document.querySelectorAll(`[id^="input-${id}-"]`).forEach(i => i.value = '');
+    
+    const fileInput = document.getElementById(`file-${id}`);
+    const fileLabel = document.getElementById(`file-label-${id}`);
+    if(fileInput) fileInput.value = '';
+    if(fileLabel) {
+        fileLabel.innerText = '';
+        fileLabel.classList.add('hidden');
+    }
+
     terminalLog(`Console cleared for req-${id.split('-').pop()}`);
 };
 
 window.testReq = async (btn, url, method, id) => {
     if (btn.disabled) return;
-
     const out = document.getElementById(`output-${id}`);
     const status = document.getElementById(`status-${id}`);
     const statusDot = document.getElementById(`status-dot-${id}`);
     const time = document.getElementById(`time-${id}`);
     const dlBtn = document.getElementById(`dl-btn-${id}`);
-    
-    const originalBtnText = 'Execute';
-    
+    const fileInput = document.getElementById(`file-${id}`);
+    const hasFile = fileInput && fileInput.files.length > 0;
+    const originalBtnText = btn.innerHTML;
     btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i>`;
     btn.classList.add('opacity-70', 'cursor-not-allowed');
     
     let startTime = Date.now();
     let timerInterval = setInterval(() => {
         const elapsed = Date.now() - startTime;
-        btn.innerHTML = `<span class="font-mono">${elapsed}ms...</span>`;
+        time.innerText = `${elapsed}ms`;
     }, 75);
     
     document.getElementById(`res-area-${id}`).classList.remove('hidden');
@@ -447,9 +480,9 @@ window.testReq = async (btn, url, method, id) => {
     
     status.innerText = 'PROCESSING...';
     status.className = 'text-yellow-400 font-bold font-mono';
-    statusDot.className = 'w-2 h-2 rounded-full bg-yellow-400';
+    statusDot.className = 'w-2 h-2 rounded-full bg-yellow-400 animate-pulse';
 
-    out.innerHTML = '<span class="text-gray-500 italic">executing...</span>';
+    out.innerHTML = '<span class="text-gray-500 italic">establishing connection...</span>';
     
     const params = {};
     document.querySelectorAll(`[id^="input-${id}-"]`).forEach(i => {
@@ -457,24 +490,32 @@ window.testReq = async (btn, url, method, id) => {
     });
 
     let fetchUrl = url + (method === 'GET' && Object.keys(params).length ? '?' + new URLSearchParams(params) : '');
-    let opts = { method, ...(method !== 'GET' ? { headers: {'Content-Type': 'application/json'}, body: JSON.stringify(params) } : {}) };
+    
+    let opts = { method };
+
+    if (method !== 'GET') {
+        if (hasFile) {
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            Object.keys(params).forEach(key => formData.append(key, params[key]));
+            opts.body = formData;
+        } else {
+            opts.headers = {'Content-Type': 'application/json'};
+            opts.body = JSON.stringify(params);
+        }
+    }
 
     const fullUrl = fetchUrl.startsWith('http') ? fetchUrl : window.location.origin + fetchUrl;
 
     try {
         const req = await fetch(fetchUrl, opts);
-        
         clearInterval(timerInterval);
-        const end = performance.now();
         const duration = (Date.now() - startTime); 
-        
         status.innerText = `${req.status} ${req.statusText}`;
         status.className = req.ok ? 'text-green-400 font-bold font-mono' : 'text-red-400 font-bold font-mono';
         statusDot.className = req.ok ? 'w-2 h-2 rounded-full bg-green-400' : 'w-2 h-2 rounded-full bg-red-400';
         time.innerText = `${duration}ms`;
-
-        terminalLog(`[${req.status}] ${fullUrl} (${duration}ms)`, req.ok ? 'req-success' : 'req-error');
-
+        terminalLog(`[${req.status}] ${method} ${fullUrl} (${duration}ms)`, req.ok ? 'req-success' : 'req-error');
         const type = req.headers.get('content-type');
         if (type?.includes('json')) {
             const json = await req.json();
@@ -487,14 +528,14 @@ window.testReq = async (btn, url, method, id) => {
                 dlBtn.download = `img-${Date.now()}.jpg`;
                 dlBtn.classList.remove('hidden');
             }
-            
             out.innerHTML = `
                 <div class="border border-dashed border-gray-600 p-4 bg-black/20 rounded-lg flex justify-center">
                     <img src="${urlObj}" class="max-w-full shadow-lg max-h-[400px] rounded border border-gray-700">
                 </div>`;
-        } else if (type?.includes('audio')) {
+        } else if (type?.includes('audio') || type?.includes('video')) {
             const blob = await req.blob();
-             out.innerHTML = `<audio controls src="${URL.createObjectURL(blob)}" class="w-full mt-2 rounded"></audio>`;
+            const tag = type.includes('audio') ? 'audio' : 'video';
+            out.innerHTML = `<${tag} controls src="${URL.createObjectURL(blob)}" class="w-full mt-2 rounded border border-slate-700"></${tag}>`;
         } else {
             out.innerText = await req.text();
         }
@@ -511,7 +552,6 @@ window.testReq = async (btn, url, method, id) => {
         btn.classList.remove('opacity-70', 'cursor-not-allowed');
     }
 };
-
 function syntaxHighlight(json) {
     if (typeof json != 'string') json = JSON.stringify(json, undefined, 2);
     return json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
