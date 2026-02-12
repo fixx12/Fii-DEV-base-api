@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="https://c.termai.cc/i191/f9nlM5.jpg" alt="KuroNeko API Banner" width="100%" style="border-radius: 10px;" />
+<img src="https://files.catbox.moe/holo8n.jpg" alt="Fii DEV API Banner" width="100%" style="border-radius: 10px;" />
 
-# KuroNeko API
+# Fii DEV API
 **Simple, Fast, and Dynamic REST API Base built with Express & TypeScript.**
 
 <p align="center">
@@ -13,7 +13,6 @@
   <img src="https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Vercel" />
 </p>
 
-[Demo Website](https://your-demo-link.com) • [Rest Api](https://your-api-link.com) • [Bug Report](https://github.com/DanzzAraAra/kuroneko-base-api/issues)
 
 </div>
 
@@ -21,7 +20,7 @@
 
 ## 📖 Introduction
 
-**KuroNeko API** adalah template dasar (boilerplate) untuk membuat REST API yang modern, rapi, dan mudah dikembangkan.
+**FII DEV API** adalah template dasar (boilerplate) untuk membuat REST API yang modern, rapi, dan mudah dikembangkan.
 
 Project ini dirancang untuk mengatasi kerumitan setup awal dengan menyediakan fitur **Auto-Load Router** berbasis konfigurasi JSON, penghitung pengunjung (visitor counter), dan antarmuka dokumentasi (Docs UI) yang estetik secara otomatis.
 
@@ -250,5 +249,5 @@ Project ini dilengkapi GUI bawaan:
 </details>
 
 <div align="center">
-Created with ❤️ by Danzz
+Created with ❤️ by Fii
 </div>
