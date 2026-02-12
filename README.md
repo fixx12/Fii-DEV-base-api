@@ -88,8 +88,8 @@ Perbandingan Mode
 Pastikan kamu sudah menginstall Node.js (versi 18 atau lebih baru).
 1. Clone & Install
 ```bash
-git clone [https://github.com/DanzzAraAra/kuroneko-base-api.git](https://github.com/DanzzAraAra/kuroneko-base-api.git)
-cd kuroneko-base-api
+git clone https://github.com/fixx12/Fii-DEV-base-api
+cd Fii-DEV-base-api
 npm install
 ```
 
