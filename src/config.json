@@ -1,20 +1,20 @@
 {
   "settings": {
-    "creator": "Danzz",
-    "apiName": "KuroNeko",
+    "creator": "RfiFrmnsyh",
+    "apiName": "Fii DEV",
     "description": "A free and reliable API service designed for modern application development. Built with Node.js and TypeScript, delivering fast performance, stable endpoints, and easy integration.",
-    "apiVersion": "v1.0",
+    "apiVersion": "V2.0",
     "visitors": "0",
-    "favicon": "/src/danzz.jpg",
+    "favicon": "/src/Fii.jpg",
     "thumbnail": "/src/thumbnail.jpg",
-    "channelUrl": "https://whatsapp.com/channel/0029VbBQG1n3QxRsqN7XkS06",
-    "github": "https://github.com/DanzzAraAra"
+    "channelUrl": "https://whatsapp.com/channel/0029Vb7K9IrEKyZOplETfR0y",
+    "github": "https://github.com/fixx12"
   },
   "tags": {
     "ai": [
       {
-        "name": "Kuroneko Chat",
-        "endpoint": "/api/ai/kuroneko",
+        "name": "Fii•Assistant",
+        "endpoint": "/api/ai/Fii•Assistant",
         "filename": "kuroneko",
         "method": "GET",
         "params": [
